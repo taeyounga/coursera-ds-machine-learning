@@ -1,0 +1,180 @@
+---
+title: "Coursera Practical Machine Learning Assignment"
+author: "Taeyoung Ahn"
+date: 2018-05-06
+output: html_document
+---
+# 1. Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+# 2. Data Source
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+# 3. Loading and inspecting data
+
+## 3.1. Loading data:
+```{r}
+rm(list=ls())
+training <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv") 
+testing <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+```
+
+
+## 3.2. Inspecting Data:
+```{r}
+dim(training);dim(testing)
+```
+There are 19622 rows and 160 columns in the training data, 20 rows and 160 columns in the testing data.
+
+```{r}
+str(training)
+```
+
+# 4. Cleaning Data
+
+## 4.1. Removing redundant columns
+We have a lot of columns(features) in the testing set which are completely redundant, as they are consisted of all NA values. We want to disregard these features from both data sets. We also want to disregard features such as X, user_name, raw_timestamp, new_window, num_window as they do not contribute to the prediction of classes.
+
+```{r}
+redundant_features <- colSums(testing[,c(7:160)], na.rm = TRUE)==0
+redundant_features <- names(redundant_features[redundant_features==TRUE])
+testing <- testing[,-which(names(testing) %in% c(redundant_features, "X","user_name","raw_timestamp_part_1","raw_timestamp_part_2",
+                                                 "cvtd_timestamp","new_window","num_window"))]
+training <- training[,-which(names(training) %in% c(redundant_features, "X","user_name","raw_timestamp_part_1","raw_timestamp_part_2",
+                                                 "cvtd_timestamp","new_window","num_window"))]
+# Checking if all features are set
+str(testing)
+str(training)
+dim(training);dim(testing)
+```
+
+After removing redundant features, we can see that only 53 features are left in both training and testing data set.
+
+# 5. Creating training and testing set
+As the testing set given do not have "CLASSE" variable, we cannot use it to test if my model has worked or not.
+Its purpose is only for taking the Coursera Quiz to see if my predictions are correct or not.
+Therefore, I need to make an actual training and testing set from the cleaned "training" dataframe.
+I will name them "trainSet" and "testSet".
+
+```{r}
+#Creating data partition
+#Loading the caret package
+library(caret)
+
+#Setting the seed for reproducibility
+set.seed(1234)
+inTrain <- createDataPartition(p=0.7, list=FALSE, y=training$classe)
+trainSet <- training[inTrain,]
+testSet <- training[-inTrain,]
+```
+
+# 5. Prediction Model
+I will attempt to build following three models to predict the classe.
+1. Random Forest
+2. Decision Trees
+3. Generalized Boosted Model
+
+## 5.1. Random Forest
+
+### 5.1.1. Random Forest: Building Model
+```{r}
+controlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+modFitRandForest <- train(classe ~ ., data=trainSet, method="rf",
+                          trControl=controlRF)
+modFitRandForest$finalModel
+```
+
+### 5.1.2. Random Forest: Testing for Accuracy
+
+```{r}
+# plot matrix results
+predictRandForest <- predict(modFitRandForest, newdata=testSet)
+confMatRandForest <- confusionMatrix(predictRandForest, testSet$classe)
+confMatRandForest
+```
+
+
+```{r}
+plot(confMatRandForest$table, col = confMatRandForest$byClass, 
+     main = paste("Random Forest Accuracy =",
+                  round(confMatRandForest$overall['Accuracy'], 4)))
+```
+
+
+## 5.2. Decision Tree
+
+### 5.2.1. Decision Tree: Building Model
+
+```{r}
+library(rpart)
+modFitDecisionTree <- rpart(classe ~ ., data=trainSet, method="class")
+library(rattle)
+fancyRpartPlot(modFitDecisionTree)
+```
+
+
+### 5.2.2. Decision Tree: Testing for Accuracy
+
+```{r}
+predictDecisionTree <- predict(modFitDecisionTree, testSet, type="class")
+confMatDecisionTree <- confusionMatrix(predictDecisionTree, testSet$classe)
+confMatDecisionTree
+```
+
+```{r}
+plot(confMatDecisionTree$table, col = confMatDecisionTree$byClass, 
+     main = paste("Decision Tree Accuracy = ",
+                  round(confMatDecisionTree$overall['Accuracy'], 4)))
+```
+
+## 5.3. Generalized Boosted Model
+
+### 5.3.1. Generalized Boosted Model: Building Model
+```{r}
+set.seed(1234)
+controlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+modFitGBM <- train(classe ~ ., data=trainSet, method="gbm",
+                          trControl=controlRF)
+modFitRandForest$finalModel
+```
+
+### 5.3.2. Generalized Boosted Model: Testing for Accuracy
+```{r}
+# plot matrix results
+predictGBM <- predict(modFitGBM, newdata=testSet)
+confMatGBM <- confusionMatrix(predictGBM, testSet$classe)
+confMatGBM
+```
+
+```{r}
+plot(confMatGBM$table, col = confMatGBM$byClass, 
+     main = paste("GBM Accuracy =",
+                  round(confMatGBM$overall['Accuracy'], 4)))
+```
+
+#Conclusion
+
+Accuracy for the three models are as below:
+1. Random Forest: 0.9946
+2. Decision Tree: 0.6879
+3. Generalized Boosted Model: 0.9669
+
+Therefore we can see that Random Forest model has the highest accuracy.
+
+When we apply this model to the TEST data:
+```{r}
+testingPrediction <- predict(modFitRandForest, testing)
+testingPrediction
+```
+
+The result shows 100% accuracy in the Coursera Quiz.
